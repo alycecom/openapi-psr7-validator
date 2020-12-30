@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace League\OpenAPIValidation\PSR7\Validators;
 
 use cebe\openapi\spec\Parameter as CebeParameter;
-use cebe\openapi\spec\Schema;
 use cebe\openapi\spec\Schema as CebeSchema;
 use cebe\openapi\spec\Type as CebeType;
 use League\OpenAPIValidation\Schema\Exception\ContentTypeMismatch;
@@ -39,20 +38,17 @@ final class SerializedParameter
     private const STYLE_PIPE_DELIMITED  = 'pipeDelimited';
     private const STYLE_DEEP_OBJECT     = 'deepObject';
     private const STYLE_DELIMITER_MAP   = [
-        self::STYLE_FORM            => ',',
+        self::STYLE_FORM => ',',
         self::STYLE_SPACE_DELIMITED => ' ',
-        self::STYLE_PIPE_DELIMITED  => '|',
+        self::STYLE_PIPE_DELIMITED => '|',
     ];
 
     /** @var CebeSchema */
     private $schema;
-
     /** @var string|null */
     private $contentType;
-
     /** @var string|null */
     private $style;
-
     /** @var bool|null */
     private $explode;
 
@@ -99,7 +95,7 @@ final class SerializedParameter
     {
         if ($this->isJsonContentType()) {
             // Value MUST be a string.
-            if (!is_string($value)) {
+            if (! is_string($value)) {
                 throw TypeMismatch::becauseTypeDoesNotMatch('string', $value);
             }
 
@@ -128,22 +124,22 @@ final class SerializedParameter
      */
     private function castToSchemaType($value, ?string $type)
     {
-        if (($type === CebeType::BOOLEAN) && is_scalar($value) && preg_match('#^(true|false)$#i', (string)$value)) {
-            return is_string($value) ? strtolower($value) === 'true' : (bool)$value;
+        if (($type === CebeType::BOOLEAN) && is_scalar($value) && preg_match('#^(true|false)$#i', (string) $value)) {
+            return is_string($value) ? strtolower($value) === 'true' : (bool) $value;
         }
 
         if (
             ($type === CebeType::NUMBER)
             && is_scalar($value) && is_numeric($value)
         ) {
-            return is_int($value) ? (int)$value : (float)$value;
+            return is_int($value) ? (int) $value : (float) $value;
         }
 
         if (
             ($type === CebeType::INTEGER)
-            && is_scalar($value) && !is_float($value) && preg_match('#^[-+]?\d+$#', (string)$value)
+            && is_scalar($value) && ! is_float($value) && preg_match('#^[-+]?\d+$#', (string) $value)
         ) {
-            return (int)$value;
+            return (int) $value;
         }
 
         if (($type === CebeType::ARRAY) && is_string($value)) {
@@ -162,11 +158,12 @@ final class SerializedParameter
     }
 
     /**
-     * @param mixed $value
+     * @param mixed           $value
+     * @param CebeSchema|null $schema - optional schema of value to convert it in case of DeepObject serialisation
      *
      * @return mixed
      */
-    protected function convertToSerializationStyle($value, ?Schema $schema)
+    protected function convertToSerializationStyle($value, ?CebeSchema $schema)
     {
         if (
             $this->explode === false
@@ -180,9 +177,9 @@ final class SerializedParameter
             return $value;
         }
 
-        if ($schema && $this->explode === true && $this->style === self::STYLE_DEEP_OBJECT) {
+        if ($schema && $this->style === self::STYLE_DEEP_OBJECT) {
             foreach ($value as $key => &$val) {
-                $childSchema = $this->getChildSchema($schema, (string)$key);
+                $childSchema = $this->getChildSchema($schema, (string) $key);
                 if (is_array($val)) {
                     $val = $this->convertToSerializationStyle($val, $childSchema);
                 } else {
@@ -201,17 +198,19 @@ final class SerializedParameter
         return $this->schema;
     }
 
-    protected function getChildSchema(Schema $schema, string $key): ?Schema
+    protected function getChildSchema(CebeSchema $schema, string $key): ?CebeSchema
     {
-        if ($schema->type == CebeType::OBJECT) {
-            if ($schema->properties[$key] ?? false) {
+        if ($schema->type === CebeType::OBJECT) {
+            if (($schema->properties[$key] ?? false) && $schema->properties[$key] instanceof CebeSchema) {
                 return $schema->properties[$key];
             }
-            if (!is_bool($schema->additionalProperties)) {
+
+            if ($schema->additionalProperties instanceof CebeSchema) {
                 return $schema->additionalProperties;
             }
         }
-        if ($schema->type == CebeType::ARRAY && $schema->items) {
+
+        if ($schema->type === CebeType::ARRAY && $schema->items instanceof CebeSchema) {
             return $schema->items;
         }
 
