@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace League\OpenAPIValidation\PSR7\Validators;
 
 use cebe\openapi\spec\Parameter as CebeParameter;
-use cebe\openapi\spec\Schema;
 use cebe\openapi\spec\Schema as CebeSchema;
 use cebe\openapi\spec\Type as CebeType;
 use League\OpenAPIValidation\Schema\Exception\ContentTypeMismatch;
 use League\OpenAPIValidation\Schema\Exception\InvalidSchema;
 use League\OpenAPIValidation\Schema\Exception\SchemaMismatch;
 use League\OpenAPIValidation\Schema\Exception\TypeMismatch;
+use Respect\Validation\Exceptions\Exception;
 use Respect\Validation\Exceptions\ExceptionInterface;
 use Respect\Validation\Validator;
 
@@ -75,7 +75,7 @@ final class SerializedParameter
             }
 
             Validator::length(1, 1)->assert($content);
-        } catch (ExceptionInterface $e) {
+        } catch (Exception | ExceptionInterface $e) {
             // If there is a `schema`, `content` must be empty.
             // If there isn't a `schema`, a `content` with exactly 1 property must exist.
             // @see https://swagger.io/docs/specification/describing-parameters/#schema-vs-content
@@ -162,11 +162,12 @@ final class SerializedParameter
     }
 
     /**
-     * @param mixed $value
+     * @param mixed           $value
+     * @param CebeSchema|null $schema - optional schema of value to convert it in case of DeepObject serialisation
      *
      * @return mixed
      */
-    protected function convertToSerializationStyle($value, ?Schema $schema)
+    protected function convertToSerializationStyle($value, ?CebeSchema $schema)
     {
         if (
             $this->explode === false
@@ -180,9 +181,9 @@ final class SerializedParameter
             return $value;
         }
 
-        if ($schema && $this->explode === true && $this->style === self::STYLE_DEEP_OBJECT) {
+        if ($schema && $this->style === self::STYLE_DEEP_OBJECT) {
             foreach ($value as $key => &$val) {
-                $childSchema = $this->getChildSchema($schema, (string)$key);
+                $childSchema = $this->getChildSchema($schema, (string) $key);
                 if (is_array($val)) {
                     $val = $this->convertToSerializationStyle($val, $childSchema);
                 } else {
@@ -201,17 +202,19 @@ final class SerializedParameter
         return $this->schema;
     }
 
-    protected function getChildSchema(Schema $schema, string $key): ?Schema
+    protected function getChildSchema(CebeSchema $schema, string $key): ?CebeSchema
     {
-        if ($schema->type == CebeType::OBJECT) {
-            if ($schema->properties[$key] ?? false) {
+        if ($schema->type === CebeType::OBJECT) {
+            if (($schema->properties[$key] ?? false) && $schema->properties[$key] instanceof CebeSchema) {
                 return $schema->properties[$key];
             }
-            if (!is_bool($schema->additionalProperties)) {
+
+            if ($schema->additionalProperties instanceof CebeSchema) {
                 return $schema->additionalProperties;
             }
         }
-        if ($schema->type == CebeType::ARRAY && $schema->items) {
+
+        if ($schema->type === CebeType::ARRAY && $schema->items instanceof CebeSchema) {
             return $schema->items;
         }
 
